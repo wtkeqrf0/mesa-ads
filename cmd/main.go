@@ -72,6 +72,14 @@ func main() {
 	}
 	defer pool.Close()
 
+	if cfg.Psql.RunSeed {
+		if err = db.Seed(ctx, pool); err != nil {
+			logger.Error("seed error", slog.Any("error", err))
+		} else {
+			logger.Info("seeding completed")
+		}
+	}
+
 	repo := postgres.NewAdRepository(pool)
 	svc := usecase.NewAdService(repo)
 

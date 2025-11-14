@@ -9,8 +9,9 @@ import "net/url"
 type Postgres struct {
 	// Addr is a PostgreSQL connection string. It should include the
 	// sslmode parameter if required.
-	Addr url.URL `env:"ADDRESS" envDefault:"postgres://postgres:password@localhost:5432/postgres?sslmode=disable"`
+	Addr url.URL `env:"ADDR" envDefault:"postgres://postgres:password@localhost:5432/postgres?sslmode=disable"`
 	// RunMigrations controls whether database migrations are executed on
 	// startup. Only honoured by main.
 	RunMigrations bool `env:"RUN_MIGRATIONS" envDefault:"false"`
+	RunSeed       bool `env:"RUN_SEED" envDefault:"false"`
 }

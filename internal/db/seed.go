@@ -1,30 +1,18 @@
-package main
+package db
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"math/rand"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
 
 // Seed inserts demo data into the mesa-ads database.
-// Run with `go run db/seeds/seed.go` after database and migrations are ready.
-func main() {
-	dsn := os.Getenv("PSQL_ADDRESS")
-	if dsn == "" {
-		dsn = "postgres://user:password@localhost:5432/ads?sslmode=disable"
-	}
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		log.Fatalf("failed to connect: %v", err)
-	}
-	defer db.Close()
+func Seed(ctx context.Context, db *pgxpool.Pool) error {
 	rand.Seed(time.Now().UnixNano())
 
 	// create campaigns
@@ -39,9 +27,9 @@ func main() {
 		cpmBid := int64(500) // 0.50 per thousand
 		cpcBid := int64(50)  // 0.50 per click
 		status := "active"
-		_, err := db.Exec(`INSERT INTO campaigns (id, name, start_date, end_date, daily_budget, total_budget, remaining_daily_budget, remaining_total_budget, cpm_bid, cpc_bid, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())`, i, name, start, end, dailyBudget, totalBudget, remainingDaily, remainingTotal, cpmBid, cpcBid, status)
+		_, err := db.Exec(ctx, `INSERT INTO campaigns (id, name, start_date, end_date, daily_budget, total_budget, remaining_daily_budget, remaining_total_budget, cpm_bid, cpc_bid, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())`, i, name, start, end, dailyBudget, totalBudget, remainingDaily, remainingTotal, cpmBid, cpcBid, status)
 		if err != nil {
-			log.Fatalf("insert campaign: %v", err)
+			return err
 		}
 		// insert targeting
 		targeting := map[string]interface{}{
@@ -52,9 +40,9 @@ func main() {
 			"placements": []string{"pre-roll", "mid-roll"},
 		}
 		tgtJSON, _ := json.Marshal(targeting)
-		_, err = db.Exec(`INSERT INTO campaign_targeting (campaign_id, data) VALUES ($1, $2)`, i, tgtJSON)
+		_, err = db.Exec(ctx, `INSERT INTO campaign_targeting (campaign_id, data) VALUES ($1, $2)`, i, tgtJSON)
 		if err != nil {
-			log.Fatalf("insert targeting: %v", err)
+			return err
 		}
 		// create creatives for campaign
 		for j := 1; j <= 10; j++ {
@@ -66,9 +54,9 @@ func main() {
 			language := []string{"ru", "en"}[rand.Intn(2)]
 			category := []string{"music", "tech", "sports"}[rand.Intn(3)]
 			placement := []string{"pre-roll", "mid-roll", "post-roll"}[rand.Intn(3)]
-			_, err := db.Exec(`INSERT INTO creatives (id, campaign_id, title, video_url, landing_url, duration, language, category, placement, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`, crID, i, title, videoURL, landingURL, duration, language, category, placement)
+			_, err = db.Exec(ctx, `INSERT INTO creatives (id, campaign_id, title, video_url, landing_url, duration, language, category, placement, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`, crID, i, title, videoURL, landingURL, duration, language, category, placement)
 			if err != nil {
-				log.Fatalf("insert creative: %v", err)
+				return err
 			}
 		}
 	}
@@ -82,19 +70,19 @@ func main() {
 		userID := fmt.Sprintf("user-%d", rand.Intn(100)+1)
 		cost := int64(500) // approximate cost per impression (0.50)
 		var impID int64
-		err = db.QueryRow(`INSERT INTO impressions (token, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,now()) RETURNING id`, token, creativeID, campaignID, userID, cost).Scan(&impID)
+		err := db.QueryRow(ctx, `INSERT INTO impressions (token, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,now()) RETURNING id`, token, creativeID, campaignID, userID, cost).Scan(&impID)
 		if err != nil {
-			log.Fatalf("insert impression: %v", err)
+			return err
 		}
 		// generate clicks
 		for j := 0; j < clickPerImp; j++ {
 			clickToken := uuid.NewString()
 			clickCost := int64(50) // 0.50 per click
-			_, err = db.Exec(`INSERT INTO clicks (token, impression_id, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6,now())`, clickToken, impID, creativeID, campaignID, userID, clickCost)
+			_, err = db.Exec(ctx, `INSERT INTO clicks (token, impression_id, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6,now())`, clickToken, impID, creativeID, campaignID, userID, clickCost)
 			if err != nil {
-				log.Fatalf("insert click: %v", err)
+				return err
 			}
 		}
 	}
-	log.Println("Seeding completed")
+	return nil
 }
