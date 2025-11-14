@@ -7,14 +7,20 @@ services:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "postgres"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   mesa-ads:
     build: .
     depends_on:
       - postgres
     environment:
-      PSQL_ADDRESS: postgres://postgres:password@postgres:5432/postgres?sslmode=disable
+      PSQL_ADDR: postgres://postgres:password@postgres:5432/postgres?sslmode=disable
       PSQL_RUN_MIGRATIONS: true
+      PSQL_RUN_SEED: true
     ports:
       - "8080:8080"
 
