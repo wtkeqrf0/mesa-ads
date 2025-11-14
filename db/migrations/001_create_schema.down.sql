@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS clicks;
+DROP TABLE IF EXISTS impressions;
+DROP TABLE IF EXISTS campaign_targeting;
+DROP TABLE IF EXISTS creatives;
+DROP TABLE IF EXISTS campaigns;
