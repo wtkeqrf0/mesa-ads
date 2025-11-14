@@ -20,9 +20,9 @@ type AdUseCase struct {
 	defaultCTR float64
 }
 
-// NewAdService creates a new usecase with the provided repository. The
+// NewAdUseCase creates a new usecase with the provided repository. The
 // defaultCTR is set to a reasonable small value.
-func NewAdService(repo port.AdRepository) *AdUseCase {
+func NewAdUseCase(repo port.AdRepository) *AdUseCase {
 	return &AdUseCase{repo: repo, defaultCTR: 0.01}
 }
 

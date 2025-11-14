@@ -81,7 +81,7 @@ func main() {
 	}
 
 	repo := postgres.NewAdRepository(pool)
-	svc := usecase.NewAdService(repo)
+	svc := usecase.NewAdUseCase(repo)
 
 	handler := httpadapter.NewHandler(svc, logger)
 	srv := &http.Server{
