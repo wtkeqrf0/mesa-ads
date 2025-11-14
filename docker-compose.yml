@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mesa-ads:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      PSQL_ADDRESS: postgres://postgres:password@postgres:5432/postgres?sslmode=disable
+      PSQL_RUN_MIGRATIONS: true
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
