@@ -8,7 +8,6 @@ import (
 	"context"
 	"mesa-ads/internal/core/domain"
 	"mesa-ads/internal/core/port"
-	"time"
 
 	mock "github.com/stretchr/testify/mock"
 )
@@ -363,8 +362,8 @@ func (_c *MockAdRepository_GetEligibleCreatives_Call) RunAndReturn(run func(ctx 
 }
 
 // GetStats provides a mock function for the type MockAdRepository
-func (_mock *MockAdRepository) GetStats(ctx context.Context, from time.Time, to time.Time, campaignID *int64) (*port.StatsResp, error) {
-	ret := _mock.Called(ctx, from, to, campaignID)
+func (_mock *MockAdRepository) GetStats(ctx context.Context, req port.StatsReq) (*port.StatsResp, error) {
+	ret := _mock.Called(ctx, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetStats")
@@ -372,18 +371,18 @@ func (_mock *MockAdRepository) GetStats(ctx context.Context, from time.Time, to 
 
 	var r0 *port.StatsResp
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, time.Time, *int64) (*port.StatsResp, error)); ok {
-		return returnFunc(ctx, from, to, campaignID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, port.StatsReq) (*port.StatsResp, error)); ok {
+		return returnFunc(ctx, req)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, time.Time, *int64) *port.StatsResp); ok {
-		r0 = returnFunc(ctx, from, to, campaignID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, port.StatsReq) *port.StatsResp); ok {
+		r0 = returnFunc(ctx, req)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*port.StatsResp)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time, time.Time, *int64) error); ok {
-		r1 = returnFunc(ctx, from, to, campaignID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, port.StatsReq) error); ok {
+		r1 = returnFunc(ctx, req)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -397,26 +396,24 @@ type MockAdRepository_GetStats_Call struct {
 
 // GetStats is a helper method to define mock.On call
 //   - ctx
-//   - from
-//   - to
-//   - campaignID
-func (_e *MockAdRepository_Expecter) GetStats(ctx interface{}, from interface{}, to interface{}, campaignID interface{}) *MockAdRepository_GetStats_Call {
-	return &MockAdRepository_GetStats_Call{Call: _e.mock.On("GetStats", ctx, from, to, campaignID)}
+//   - req
+func (_e *MockAdRepository_Expecter) GetStats(ctx interface{}, req interface{}) *MockAdRepository_GetStats_Call {
+	return &MockAdRepository_GetStats_Call{Call: _e.mock.On("GetStats", ctx, req)}
 }
 
-func (_c *MockAdRepository_GetStats_Call) Run(run func(ctx context.Context, from time.Time, to time.Time, campaignID *int64)) *MockAdRepository_GetStats_Call {
+func (_c *MockAdRepository_GetStats_Call) Run(run func(ctx context.Context, req port.StatsReq)) *MockAdRepository_GetStats_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(time.Time), args[2].(time.Time), args[3].(*int64))
+		run(args[0].(context.Context), args[1].(port.StatsReq))
 	})
 	return _c
 }
 
-func (_c *MockAdRepository_GetStats_Call) Return(stats *port.StatsResp, err error) *MockAdRepository_GetStats_Call {
-	_c.Call.Return(stats, err)
+func (_c *MockAdRepository_GetStats_Call) Return(statsResp *port.StatsResp, err error) *MockAdRepository_GetStats_Call {
+	_c.Call.Return(statsResp, err)
 	return _c
 }
 
-func (_c *MockAdRepository_GetStats_Call) RunAndReturn(run func(ctx context.Context, from time.Time, to time.Time, campaignID *int64) (*port.StatsResp, error)) *MockAdRepository_GetStats_Call {
+func (_c *MockAdRepository_GetStats_Call) RunAndReturn(run func(ctx context.Context, req port.StatsReq) (*port.StatsResp, error)) *MockAdRepository_GetStats_Call {
 	_c.Call.Return(run)
 	return _c
 }
