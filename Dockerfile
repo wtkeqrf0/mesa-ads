@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 COPY Makefile Makefile
 COPY cmd cmd
 COPY internal internal
-COPY db/migrations db/migrations
+COPY migrations migrations
 RUN make build
 
 FROM ubuntu:noble-20250529

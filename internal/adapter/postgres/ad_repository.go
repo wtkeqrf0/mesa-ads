@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const maxImpressionsPerUserPerCreative = 3
+
 // AdRepository implements port.AdRepository using pgxpool for PostgreSQL.
 type AdRepository struct {
 	pool *pgxpool.Pool
@@ -59,61 +61,57 @@ func (r *AdRepository) GetEligibleCreatives(ctx context.Context, user domain.Use
         WHERE c.status = 'active'
           AND now() BETWEEN c.start_date AND c.end_date
           AND c.remaining_daily_budget > 0 AND c.remaining_total_budget > 0`
-	// Execute the query
+
 	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	// Use CollectRows to scan each row into a temporary struct.
-	type rawCandidate struct {
-		Camp         domain.Campaign
-		Cr           domain.Creative
-		TargetingRaw []byte
-	}
-	raw, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (rawCandidate, error) {
-		var rc rawCandidate
-		// Scan campaign fields
-		err = row.Scan(
-			&rc.Camp.ID,
-			&rc.Camp.Name,
-			&rc.Camp.StartDate,
-			&rc.Camp.EndDate,
-			&rc.Camp.DailyBudget,
-			&rc.Camp.TotalBudget,
-			&rc.Camp.RemainingDailyBudget,
-			&rc.Camp.RemainingTotalBudget,
-			&rc.Camp.CPMBid,
-			&rc.Camp.CPCBid,
-			&rc.Camp.Status,
-			&rc.Camp.CreatedAt,
-			&rc.Camp.UpdatedAt,
-			&rc.Cr.ID,
-			&rc.Cr.CampaignID,
-			&rc.Cr.Title,
-			&rc.Cr.VideoURL,
-			&rc.Cr.LandingURL,
-			&rc.Cr.Duration,
-			&rc.Cr.Language,
-			&rc.Cr.Category,
-			&rc.Cr.Placement,
-			&rc.Cr.CreatedAt,
-			&rc.Cr.UpdatedAt,
-			&rc.TargetingRaw,
+	defer rows.Close()
+
+	candidates := make([]port.CreativeCandidate, 0)
+
+	for rows.Next() {
+		var (
+			camp         domain.Campaign
+			cr           domain.Creative
+			targetingRaw []byte
 		)
-		return rc, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	// Filter and convert raw results into CreativeCandidate
-	candidates := make([]port.CreativeCandidate, 0, len(raw))
-	for _, rc := range raw {
+
+		if err = rows.Scan(
+			&camp.ID,
+			&camp.Name,
+			&camp.StartDate,
+			&camp.EndDate,
+			&camp.DailyBudget,
+			&camp.TotalBudget,
+			&camp.RemainingDailyBudget,
+			&camp.RemainingTotalBudget,
+			&camp.CPMBid,
+			&camp.CPCBid,
+			&camp.Status,
+			&camp.CreatedAt,
+			&camp.UpdatedAt,
+			&cr.ID,
+			&cr.CampaignID,
+			&cr.Title,
+			&cr.VideoURL,
+			&cr.LandingURL,
+			&cr.Duration,
+			&cr.Language,
+			&cr.Category,
+			&cr.Placement,
+			&cr.CreatedAt,
+			&cr.UpdatedAt,
+			&targetingRaw,
+		); err != nil {
+			return nil, err
+		}
+
 		var tgt domain.Targeting
-		if err = json.Unmarshal(rc.TargetingRaw, &tgt); err != nil {
-			// skip malformed targeting
+		if err = json.Unmarshal(targetingRaw, &tgt); err != nil {
 			continue
 		}
-		// apply targeting filters using slices.Contains from golang.org/x/exp/slices.
+
 		if len(tgt.Languages) > 0 && !slices.Contains(tgt.Languages, user.Language) {
 			continue
 		}
@@ -138,17 +136,46 @@ func (r *AdRepository) GetEligibleCreatives(ctx context.Context, user domain.Use
 				continue
 			}
 		}
+
+		// ограничиваем повторы креатива для одного пользователя
+		if user.UserID != "" {
+			var cnt int
+			err = r.pool.QueryRow(
+				ctx,
+				`SELECT COUNT(*) 
+                   FROM impressions 
+                  WHERE creative_id = $1 
+                    AND user_id = $2 
+                    AND created_at > now() - INTERVAL '1 hour'`,
+				cr.ID,
+				user.UserID,
+			).Scan(&cnt)
+			if err != nil {
+				return nil, err
+			}
+
+			if cnt >= maxImpressionsPerUserPerCreative {
+				// пользователь уже достаточно часто видел этот ролик недавно
+				continue
+			}
+		}
+
 		candidates = append(candidates, port.CreativeCandidate{
-			Creative: rc.Cr,
-			Campaign: rc.Camp,
+			Creative: cr,
+			Campaign: camp,
 			Target:   tgt,
 		})
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return candidates, nil
 }
 
 // CreateImpressionAndDeductBudget inserts impression and deducts budget for CPM campaigns.
-func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp *domain.Impression, cpmBid int64) error {
+func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp domain.Impression, cpmBid int64) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return err
@@ -160,19 +187,17 @@ func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp 
 			_ = tx.Commit(ctx)
 		}
 	}()
-	// lock campaign
 	var remainingDaily, remainingTotal int64
 	err = tx.QueryRow(ctx, `SELECT remaining_daily_budget, remaining_total_budget FROM campaigns WHERE id = $1 FOR UPDATE`, imp.CampaignID).Scan(&remainingDaily, &remainingTotal)
 	if err != nil {
 		return err
 	}
-	// compute cost per impression
 	cost := int64(0)
 	if cpmBid > 0 {
 		cost = (cpmBid + 999) / 1000
 	}
 	if cost > 0 && (remainingDaily < cost || remainingTotal < cost) {
-		return errors.New("insufficient budget")
+		return port.ErrInsufficientBudget
 	}
 	if cost > 0 {
 		_, err = tx.Exec(ctx, `UPDATE campaigns SET remaining_daily_budget = remaining_daily_budget - $1, remaining_total_budget = remaining_total_budget - $1 WHERE id = $2`, cost, imp.CampaignID)
@@ -181,14 +206,15 @@ func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp 
 		}
 	}
 	imp.Cost = cost
-	// insert impression with explicit created_at
 	imp.CreatedAt = time.Now().UTC()
 	_, err = tx.Exec(ctx, `INSERT INTO impressions (token, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6)`, imp.Token, imp.CreativeID, imp.CampaignID, imp.UserID, imp.Cost, imp.CreatedAt)
 	return err
 }
 
 // CreateClickAndDeductBudget inserts click event and deducts budget for CPC campaigns.
-func (r *AdRepository) CreateClickAndDeductBudget(ctx context.Context, click *domain.Click, cpcBid int64) error {
+// Operation is idempotent by token: repeated calls with the same token do not
+// create a new click and do not charge the budget again.
+func (r *AdRepository) CreateClickAndDeductBudget(ctx context.Context, click domain.Click, cpcBid int64) (err error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return err
@@ -200,26 +226,82 @@ func (r *AdRepository) CreateClickAndDeductBudget(ctx context.Context, click *do
 			_ = tx.Commit(ctx)
 		}
 	}()
-	// lock campaign
+
+	cost := cpcBid
+
+	const (
+		insertQuery = `
+INSERT INTO clicks (token, impression_id, creative_id, campaign_id, user_id, cost, created_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (token) DO NOTHING`
+		selectQuery = `SELECT remaining_daily_budget, remaining_total_budget 
+FROM campaigns WHERE id = $1 FOR UPDATE`
+	)
+
+	// если ставка CPC не задана, просто записываем клик (без списания бюджета)
+	if cost <= 0 {
+		click.Cost = 0
+		click.CreatedAt = time.Now().UTC()
+
+		_, err = tx.Exec(ctx, insertQuery,
+			click.Token,
+			click.ImpressionID,
+			click.CreativeID,
+			click.CampaignID,
+			click.UserID,
+			click.Cost,
+			click.CreatedAt,
+		)
+		return err
+	}
+
+	// 1. проверяем бюджет и блокируем строку кампании
 	var remainingDaily, remainingTotal int64
-	err = tx.QueryRow(ctx, `SELECT remaining_daily_budget, remaining_total_budget FROM campaigns WHERE id = $1 FOR UPDATE`, click.CampaignID).Scan(&remainingDaily, &remainingTotal)
+	err = tx.QueryRow(
+		ctx,
+		selectQuery,
+		click.CampaignID,
+	).Scan(&remainingDaily, &remainingTotal)
 	if err != nil {
 		return err
 	}
-	cost := cpcBid
-	if cost > 0 && (remainingDaily < cost || remainingTotal < cost) {
-		return errors.New("insufficient budget")
+
+	if remainingDaily < cost || remainingTotal < cost {
+		return port.ErrInsufficientBudget
 	}
-	if cost > 0 {
-		_, err = tx.Exec(ctx, `UPDATE campaigns SET remaining_daily_budget = remaining_daily_budget - $1, remaining_total_budget = remaining_total_budget - $1 WHERE id = $2`, cost, click.CampaignID)
-		if err != nil {
-			return err
-		}
-	}
+
+	// 2. Пытаемся вставить клик. Если дубликат токена — строка не вставится.
 	click.Cost = cost
-	// set created_at explicitly
 	click.CreatedAt = time.Now().UTC()
-	_, err = tx.Exec(ctx, `INSERT INTO clicks (token, impression_id, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, click.Token, click.ImpressionID, click.CreativeID, click.CampaignID, click.UserID, click.Cost, click.CreatedAt)
+
+	tag, err := tx.Exec(ctx, insertQuery,
+		click.Token,
+		click.ImpressionID,
+		click.CreativeID,
+		click.CampaignID,
+		click.UserID,
+		click.Cost,
+		click.CreatedAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Если строка не вставлена — это повторный клик с тем же токеном.
+	// Считаем это идемпотентным вызовом: бюджет не списываем.
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+
+	const updateQuery = `UPDATE campaigns SET
+	remaining_daily_budget = remaining_daily_budget - $1,
+	remaining_total_budget = remaining_total_budget - $1
+WHERE id = $2`
+
+	// 3. Списываем бюджет ровно один раз для нового клика.
+	_, err = tx.Exec(ctx, updateQuery,
+		cost,
+		click.CampaignID,
+	)
 	return err
 }
 

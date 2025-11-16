@@ -2,7 +2,7 @@ package db
 
 import (
 	"errors"
-	"mesa-ads/db/migrations"
+	"mesa-ads/migrations"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"

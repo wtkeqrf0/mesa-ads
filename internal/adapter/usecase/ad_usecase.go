@@ -38,46 +38,63 @@ func (u *AdUseCase) RequestAd(ctx context.Context, user domain.UserContext) (*po
 	if len(candidates) == 0 {
 		return nil, nil
 	}
-	// compute scores and choose best candidate
-	bestIndex := -1
-	bestScore := float64(-1)
+
 	for i := range candidates {
-		score := u.computeScore(&candidates[i].Campaign)
-		candidates[i].Score = score
-		if score > bestScore {
-			bestScore = score
-			bestIndex = i
+		candidates[i].Score = u.computeScore(&candidates[i].Campaign)
+	}
+
+	// пока есть кандидаты, пытаемся выбрать лучший и списать бюджет
+	for len(candidates) > 0 {
+		// ищем кандидата с максимальным score
+		bestIndex := -1
+		bestScore := float64(-1)
+		for i := range candidates {
+			if candidates[i].Score > bestScore {
+				bestScore = candidates[i].Score
+				bestIndex = i
+			}
 		}
+		if bestIndex < 0 {
+			return nil, nil
+		}
+
+		chosen := candidates[bestIndex]
+
+		// генерим токен и создаём impression
+		token := uuid.NewString()
+		imp := domain.Impression{
+			Token:      token,
+			CreativeID: chosen.Creative.ID,
+			CampaignID: chosen.Campaign.ID,
+			UserID:     user.UserID,
+		}
+
+		err = u.repo.CreateImpressionAndDeductBudget(ctx, imp, chosen.Campaign.CPMBid)
+		if err != nil {
+			if errors.Is(err, port.ErrInsufficientBudget) {
+				// выкидываем этого кандидата из слайса
+				// TODO написать алгоритм получше
+				candidates = append(candidates[:bestIndex], candidates[bestIndex+1:]...)
+				continue
+			}
+			return nil, err
+		}
+
+		clickURL := fmt.Sprintf("/ad/click/%s", token)
+		return &port.AdResponse{
+			CreativeID: chosen.Creative.ID,
+			Duration:   chosen.Creative.Duration,
+			VideoURL:   chosen.Creative.VideoURL,
+			ClickURL:   clickURL,
+		}, nil
 	}
-	if bestIndex < 0 {
-		return nil, nil
-	}
-	chosen := candidates[bestIndex]
-	// generate unique token for impression
-	token := uuid.NewString()
-	imp := &domain.Impression{
-		Token:      token,
-		CreativeID: chosen.Creative.ID,
-		CampaignID: chosen.Campaign.ID,
-		UserID:     user.UserID,
-	}
-	cpmBid := chosen.Campaign.CPMBid
-	if err = u.repo.CreateImpressionAndDeductBudget(ctx, imp, cpmBid); err != nil {
-		return nil, err
-	}
-	clickURL := fmt.Sprintf("/ad/click/%s", token)
-	return &port.AdResponse{
-		CreativeID: chosen.Creative.ID,
-		Duration:   chosen.Creative.Duration,
-		VideoURL:   chosen.Creative.VideoURL,
-		ClickURL:   clickURL,
-	}, nil
+
+	// если все кандидаты отвалились по бюджету
+	return nil, nil
 }
 
 // RegisterClick records a click event by token and deducts CPC budget if
-// applicable. It returns the landing URL for redirection. Duplicate
-// inserts are treated as idempotent and return the same URL without
-// additional charges.
+// applicable. It returns the landing URL for redirection.
 func (u *AdUseCase) RegisterClick(ctx context.Context, token string) (string, error) {
 	if token == "" {
 		return "", errors.New("empty token")
@@ -89,6 +106,7 @@ func (u *AdUseCase) RegisterClick(ctx context.Context, token string) (string, er
 	if imp == nil {
 		return "", errors.New("impression not found")
 	}
+
 	cr, err := u.repo.GetCreative(ctx, imp.CreativeID)
 	if err != nil {
 		return "", err
@@ -96,6 +114,7 @@ func (u *AdUseCase) RegisterClick(ctx context.Context, token string) (string, er
 	if cr == nil {
 		return "", errors.New("creative not found")
 	}
+
 	camp, err := u.repo.GetCampaign(ctx, imp.CampaignID)
 	if err != nil {
 		return "", err
@@ -104,8 +123,7 @@ func (u *AdUseCase) RegisterClick(ctx context.Context, token string) (string, er
 		return "", errors.New("campaign not found")
 	}
 
-	cpcBid := camp.CPCBid
-	click := &domain.Click{
+	click := domain.Click{
 		Token:        token,
 		CreativeID:   imp.CreativeID,
 		CampaignID:   imp.CampaignID,
@@ -113,10 +131,10 @@ func (u *AdUseCase) RegisterClick(ctx context.Context, token string) (string, er
 		ImpressionID: &imp.ID,
 	}
 
-	if err = u.repo.CreateClickAndDeductBudget(ctx, click, cpcBid); err != nil {
-		// treat duplicate insert as idempotent – return landing URL
-		return cr.LandingURL, nil
+	if err = u.repo.CreateClickAndDeductBudget(ctx, click, camp.CPCBid); err != nil {
+		return "", err
 	}
+
 	return cr.LandingURL, nil
 }
 
