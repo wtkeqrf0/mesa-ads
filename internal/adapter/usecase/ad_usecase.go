@@ -80,7 +80,7 @@ func (u *AdUseCase) RequestAd(ctx context.Context, user domain.UserContext) (*po
 			return nil, err
 		}
 
-		clickURL := fmt.Sprintf("/ad/click/%s", token)
+		clickURL := fmt.Sprintf("/api/v1/ad/click/%s", token)
 		return &port.AdResponse{
 			CreativeID: chosen.Creative.ID,
 			Duration:   chosen.Creative.Duration,

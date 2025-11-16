@@ -24,9 +24,12 @@ type Handler struct {
 func NewHandler(svc port.AdUseCase, logger *slog.Logger) *Handler {
 	h := &Handler{svc: svc, logger: logger}
 	r := chi.NewRouter()
-	r.Post("/ad/request", h.handleAdRequest)
-	r.Get("/ad/click/{token}", h.handleAdClick)
-	r.Get("/stats/overview", h.handleStatsOverview)
+
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Post("/ad/request", h.handleAdRequest)
+		r.Get("/ad/click/{token}", h.handleAdClick)
+		r.Get("/stats/overview", h.handleStatsOverview)
+	})
 	h.router = r
 	return h
 }
