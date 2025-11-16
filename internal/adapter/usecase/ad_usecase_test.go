@@ -28,16 +28,14 @@ func TestAdSelection(t *testing.T) {
 		},
 	}
 
-	// repo.GetEligibleCreatives возвращает наших кандидатов
 	repo.EXPECT().
 		GetEligibleCreatives(mock.Anything, user).
 		Return(creatives, nil)
 
-	// Импрессию мы не проверяем детально, просто разрешаем её создавать
 	repo.EXPECT().
 		CreateImpressionAndDeductBudget(
 			mock.Anything,
-			mock.AnythingOfType("*domain.Impression"),
+			mock.AnythingOfType("domain.Impression"),
 			int64(1000),
 		).
 		Return(nil)
@@ -66,25 +64,22 @@ func TestConcurrentBudget(t *testing.T) {
 		Campaign: domain.Campaign{ID: 1, CPMBid: 1000},
 	}}
 
-	// "Глобальный" бюджет и мьютекс для симуляции конкурентного доступа
 	var (
 		mu     sync.Mutex
 		budget int64 = 100
 	)
 
-	// Всегда отдаём один и тот же список кандидатов
 	repo.EXPECT().
 		GetEligibleCreatives(mock.Anything, user).
 		Return(candidates, nil)
 
-	// В CreateImpressionAndDeductBudget эмулируем списание бюджета, как раньше в mockRepo
 	repo.EXPECT().
 		CreateImpressionAndDeductBudget(
 			mock.Anything,
-			mock.AnythingOfType("*domain.Impression"),
+			mock.AnythingOfType("domain.Impression"),
 			int64(1000),
 		).
-		Run(func(ctx context.Context, imp *domain.Impression, cpmBid int64) {
+		Run(func(ctx context.Context, imp domain.Impression, cpmBid int64) {
 			mu.Lock()
 			defer mu.Unlock()
 

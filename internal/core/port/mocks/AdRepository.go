@@ -40,7 +40,7 @@ func (_m *MockAdRepository) EXPECT() *MockAdRepository_Expecter {
 }
 
 // CreateClickAndDeductBudget provides a mock function for the type MockAdRepository
-func (_mock *MockAdRepository) CreateClickAndDeductBudget(ctx context.Context, click *domain.Click, cpcBid int64) error {
+func (_mock *MockAdRepository) CreateClickAndDeductBudget(ctx context.Context, click domain.Click, cpcBid int64) error {
 	ret := _mock.Called(ctx, click, cpcBid)
 
 	if len(ret) == 0 {
@@ -48,7 +48,7 @@ func (_mock *MockAdRepository) CreateClickAndDeductBudget(ctx context.Context, c
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Click, int64) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.Click, int64) error); ok {
 		r0 = returnFunc(ctx, click, cpcBid)
 	} else {
 		r0 = ret.Error(0)
@@ -69,9 +69,9 @@ func (_e *MockAdRepository_Expecter) CreateClickAndDeductBudget(ctx interface{},
 	return &MockAdRepository_CreateClickAndDeductBudget_Call{Call: _e.mock.On("CreateClickAndDeductBudget", ctx, click, cpcBid)}
 }
 
-func (_c *MockAdRepository_CreateClickAndDeductBudget_Call) Run(run func(ctx context.Context, click *domain.Click, cpcBid int64)) *MockAdRepository_CreateClickAndDeductBudget_Call {
+func (_c *MockAdRepository_CreateClickAndDeductBudget_Call) Run(run func(ctx context.Context, click domain.Click, cpcBid int64)) *MockAdRepository_CreateClickAndDeductBudget_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*domain.Click), args[2].(int64))
+		run(args[0].(context.Context), args[1].(domain.Click), args[2].(int64))
 	})
 	return _c
 }
@@ -81,13 +81,13 @@ func (_c *MockAdRepository_CreateClickAndDeductBudget_Call) Return(err error) *M
 	return _c
 }
 
-func (_c *MockAdRepository_CreateClickAndDeductBudget_Call) RunAndReturn(run func(ctx context.Context, click *domain.Click, cpcBid int64) error) *MockAdRepository_CreateClickAndDeductBudget_Call {
+func (_c *MockAdRepository_CreateClickAndDeductBudget_Call) RunAndReturn(run func(ctx context.Context, click domain.Click, cpcBid int64) error) *MockAdRepository_CreateClickAndDeductBudget_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // CreateImpressionAndDeductBudget provides a mock function for the type MockAdRepository
-func (_mock *MockAdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp *domain.Impression, cpmBid int64) error {
+func (_mock *MockAdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp domain.Impression, cpmBid int64) error {
 	ret := _mock.Called(ctx, imp, cpmBid)
 
 	if len(ret) == 0 {
@@ -95,7 +95,7 @@ func (_mock *MockAdRepository) CreateImpressionAndDeductBudget(ctx context.Conte
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Impression, int64) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.Impression, int64) error); ok {
 		r0 = returnFunc(ctx, imp, cpmBid)
 	} else {
 		r0 = ret.Error(0)
@@ -116,9 +116,9 @@ func (_e *MockAdRepository_Expecter) CreateImpressionAndDeductBudget(ctx interfa
 	return &MockAdRepository_CreateImpressionAndDeductBudget_Call{Call: _e.mock.On("CreateImpressionAndDeductBudget", ctx, imp, cpmBid)}
 }
 
-func (_c *MockAdRepository_CreateImpressionAndDeductBudget_Call) Run(run func(ctx context.Context, imp *domain.Impression, cpmBid int64)) *MockAdRepository_CreateImpressionAndDeductBudget_Call {
+func (_c *MockAdRepository_CreateImpressionAndDeductBudget_Call) Run(run func(ctx context.Context, imp domain.Impression, cpmBid int64)) *MockAdRepository_CreateImpressionAndDeductBudget_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(*domain.Impression), args[2].(int64))
+		run(args[0].(context.Context), args[1].(domain.Impression), args[2].(int64))
 	})
 	return _c
 }
@@ -128,7 +128,7 @@ func (_c *MockAdRepository_CreateImpressionAndDeductBudget_Call) Return(err erro
 	return _c
 }
 
-func (_c *MockAdRepository_CreateImpressionAndDeductBudget_Call) RunAndReturn(run func(ctx context.Context, imp *domain.Impression, cpmBid int64) error) *MockAdRepository_CreateImpressionAndDeductBudget_Call {
+func (_c *MockAdRepository_CreateImpressionAndDeductBudget_Call) RunAndReturn(run func(ctx context.Context, imp domain.Impression, cpmBid int64) error) *MockAdRepository_CreateImpressionAndDeductBudget_Call {
 	_c.Call.Return(run)
 	return _c
 }
