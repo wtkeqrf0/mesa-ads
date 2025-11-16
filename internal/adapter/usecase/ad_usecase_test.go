@@ -5,11 +5,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	"mesa-ads/internal/core/domain"
 	"mesa-ads/internal/core/port"
 	"mesa-ads/internal/core/port/mocks"
-
-	"github.com/stretchr/testify/mock"
 )
 
 // TestAdSelection ensures the usecase picks the highest eCPM creative.
