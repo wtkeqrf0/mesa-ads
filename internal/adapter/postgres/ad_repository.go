@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"mesa-ads/internal/core/domain"
-	"mesa-ads/internal/core/port"
 	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"mesa-ads/internal/core/domain"
+	"mesa-ads/internal/core/port"
 )
 
 const maxImpressionsPerUserPerCreative = 3
@@ -27,7 +27,10 @@ func NewAdRepository(pool *pgxpool.Pool) *AdRepository {
 }
 
 // GetEligibleCreatives returns creatives matching the user context.
-func (r *AdRepository) GetEligibleCreatives(ctx context.Context, user domain.UserContext) ([]port.CreativeCandidate, error) {
+func (r *AdRepository) GetEligibleCreatives(
+	ctx context.Context,
+	user domain.UserContext,
+) ([]port.CreativeCandidate, error) {
 	query := `
         SELECT
             c.id,
@@ -187,8 +190,10 @@ func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp 
 			_ = tx.Commit(ctx)
 		}
 	}()
+	const selectQuery = `SELECT remaining_daily_budget, remaining_total_budget FROM campaigns WHERE id = $1 FOR UPDATE`
+
 	var remainingDaily, remainingTotal int64
-	err = tx.QueryRow(ctx, `SELECT remaining_daily_budget, remaining_total_budget FROM campaigns WHERE id = $1 FOR UPDATE`, imp.CampaignID).Scan(&remainingDaily, &remainingTotal)
+	err = tx.QueryRow(ctx, selectQuery, imp.CampaignID).Scan(&remainingDaily, &remainingTotal)
 	if err != nil {
 		return err
 	}
@@ -200,14 +205,23 @@ func (r *AdRepository) CreateImpressionAndDeductBudget(ctx context.Context, imp 
 		return port.ErrInsufficientBudget
 	}
 	if cost > 0 {
-		_, err = tx.Exec(ctx, `UPDATE campaigns SET remaining_daily_budget = remaining_daily_budget - $1, remaining_total_budget = remaining_total_budget - $1 WHERE id = $2`, cost, imp.CampaignID)
+		const updateQuery = `UPDATE campaigns SET
+remaining_daily_budget = remaining_daily_budget - $1,
+remaining_total_budget = remaining_total_budget - $1
+	WHERE id = $2`
+		_, err = tx.Exec(ctx, updateQuery, cost, imp.CampaignID)
 		if err != nil {
 			return err
 		}
 	}
+
+	const insertQuery = `INSERT INTO impressions
+    (token, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6)`
+
 	imp.Cost = cost
 	imp.CreatedAt = time.Now().UTC()
-	_, err = tx.Exec(ctx, `INSERT INTO impressions (token, creative_id, campaign_id, user_id, cost, created_at) VALUES ($1,$2,$3,$4,$5,$6)`, imp.Token, imp.CreativeID, imp.CampaignID, imp.UserID, imp.Cost, imp.CreatedAt)
+	_, err = tx.Exec(ctx, insertQuery, imp.Token, imp.CreativeID,
+		imp.CampaignID, imp.UserID, imp.Cost, imp.CreatedAt)
 	return err
 }
 
@@ -308,18 +322,21 @@ WHERE id = $2`
 // GetStats returns aggregated events for campaigns.
 func (r *AdRepository) GetStats(ctx context.Context, req port.StatsReq) (*port.StatsResp, error) {
 	args := []interface{}{req.From, req.To}
-	whereCampaign := ""
+	whereClause := "WHERE created_at >= $1 AND created_at <= $2"
+
 	if req.CampaignID != nil {
-		whereCampaign = "AND campaign_id = $3"
+		whereClause += " AND campaign_id = $3"
 		args = append(args, *req.CampaignID)
 	}
-	impQuery := fmt.Sprintf(`SELECT COALESCE(count(*),0), COALESCE(sum(cost),0) FROM impressions WHERE created_at >= $1 AND created_at <= $2 %s`, whereCampaign)
+
+	impQuery := `SELECT COALESCE(count(*),0), COALESCE(sum(cost),0) FROM impressions ` + whereClause
 	var impCount, impCost int64
 	err := r.pool.QueryRow(ctx, impQuery, args...).Scan(&impCount, &impCost)
 	if err != nil {
 		return nil, err
 	}
-	clickQuery := fmt.Sprintf(`SELECT COALESCE(count(*),0), COALESCE(sum(cost),0) FROM clicks WHERE created_at >= $1 AND created_at <= $2 %s`, whereCampaign)
+
+	clickQuery := `SELECT COALESCE(count(*),0), COALESCE(sum(cost),0) FROM clicks ` + whereClause
 	var clickCount, clickCost int64
 	err = r.pool.QueryRow(ctx, clickQuery, args...).Scan(&clickCount, &clickCost)
 	if err != nil {
@@ -334,8 +351,13 @@ func (r *AdRepository) GetStats(ctx context.Context, req port.StatsReq) (*port.S
 
 // FindImpressionByToken returns impression by token.
 func (r *AdRepository) FindImpressionByToken(ctx context.Context, token string) (*domain.Impression, error) {
+	const query = `SELECT
+id, token, creative_id, campaign_id, user_id, cost, created_at
+FROM impressions WHERE token = $1`
 	var imp domain.Impression
-	err := r.pool.QueryRow(ctx, `SELECT id, token, creative_id, campaign_id, user_id, cost, created_at FROM impressions WHERE token = $1`, token).Scan(&imp.ID, &imp.Token, &imp.CreativeID, &imp.CampaignID, &imp.UserID, &imp.Cost, &imp.CreatedAt)
+	err := r.pool.QueryRow(ctx, query, token).Scan(
+		&imp.ID, &imp.Token, &imp.CreativeID, &imp.CampaignID, &imp.UserID, &imp.Cost, &imp.CreatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -347,9 +369,13 @@ func (r *AdRepository) FindImpressionByToken(ctx context.Context, token string) 
 
 // GetCreative returns a creative by id.
 func (r *AdRepository) GetCreative(ctx context.Context, id int64) (*domain.Creative, error) {
+	const query = `SELECT id, campaign_id, title, video_url, landing_url,
+duration, language, category, placement, created_at, updated_at FROM creatives WHERE id = $1`
+
 	var cr domain.Creative
-	err := r.pool.QueryRow(ctx, `SELECT id, campaign_id, title, video_url, landing_url, duration, language, category, placement, created_at, updated_at FROM creatives WHERE id = $1`, id).
-		Scan(&cr.ID, &cr.CampaignID, &cr.Title, &cr.VideoURL, &cr.LandingURL, &cr.Duration, &cr.Language, &cr.Category, &cr.Placement, &cr.CreatedAt, &cr.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, id).
+		Scan(&cr.ID, &cr.CampaignID, &cr.Title, &cr.VideoURL, &cr.LandingURL,
+			&cr.Duration, &cr.Language, &cr.Category, &cr.Placement, &cr.CreatedAt, &cr.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -361,9 +387,16 @@ func (r *AdRepository) GetCreative(ctx context.Context, id int64) (*domain.Creat
 
 // GetCampaign returns a campaign by id.
 func (r *AdRepository) GetCampaign(ctx context.Context, id int64) (*domain.Campaign, error) {
+	const query = `SELECT
+id, name, start_date, end_date, daily_budget, total_budget,
+remaining_daily_budget, remaining_total_budget, cpm_bid,
+cpc_bid, status, created_at, updated_at FROM campaigns WHERE id = $1`
+
 	var c domain.Campaign
-	err := r.pool.QueryRow(ctx, `SELECT id, name, start_date, end_date, daily_budget, total_budget, remaining_daily_budget, remaining_total_budget, cpm_bid, cpc_bid, status, created_at, updated_at FROM campaigns WHERE id = $1`, id).
-		Scan(&c.ID, &c.Name, &c.StartDate, &c.EndDate, &c.DailyBudget, &c.TotalBudget, &c.RemainingDailyBudget, &c.RemainingTotalBudget, &c.CPMBid, &c.CPCBid, &c.Status, &c.CreatedAt, &c.UpdatedAt)
+	err := r.pool.QueryRow(ctx, query, id).
+		Scan(&c.ID, &c.Name, &c.StartDate, &c.EndDate, &c.DailyBudget,
+			&c.TotalBudget, &c.RemainingDailyBudget, &c.RemainingTotalBudget,
+			&c.CPMBid, &c.CPCBid, &c.Status, &c.CreatedAt, &c.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

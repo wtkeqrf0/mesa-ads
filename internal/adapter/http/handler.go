@@ -1,11 +1,12 @@
 package httpadapter
 
 import (
-	"mesa-ads/internal/core/port"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"log/slog"
+
+	"mesa-ads/internal/core/port"
 )
 
 // Handler contains dependencies and routes. It is an inbound adapter for HTTP.

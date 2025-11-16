@@ -3,10 +3,11 @@ package httpadapter
 import (
 	"encoding/json"
 	"log/slog"
-	"mesa-ads/internal/core/port"
 	"net/http"
 	"strconv"
 	"time"
+
+	"mesa-ads/internal/core/port"
 )
 
 // handleStatsOverview returns aggregated statistics for campaigns over a

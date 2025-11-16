@@ -3,8 +3,9 @@ package httpadapter
 import (
 	"encoding/json"
 	"log/slog"
-	"mesa-ads/internal/core/domain"
 	"net/http"
+
+	"mesa-ads/internal/core/domain"
 )
 
 // handleAdRequest processes an ad request and returns a creative. The

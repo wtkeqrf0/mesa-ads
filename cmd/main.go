@@ -2,18 +2,17 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"mesa-ads/internal/adapter/usecase"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"fmt"
-
 	"mesa-ads/internal/adapter/http"
 	"mesa-ads/internal/adapter/postgres"
+	"mesa-ads/internal/adapter/usecase"
 	"mesa-ads/internal/config"
 	"mesa-ads/internal/db"
 )
@@ -101,8 +100,9 @@ func main() {
 	value := <-quit
 	exitCode = 128 + int(value.(syscall.Signal))
 
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-	if err = srv.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer shutdownCancel()
+	if err = srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server shutdown error", slog.Any("error", err))
 	} else {
 		logger.Info("server gracefully stopped")

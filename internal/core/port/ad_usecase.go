@@ -2,8 +2,9 @@ package port
 
 import (
 	"context"
-	"mesa-ads/internal/core/domain"
 	"time"
+
+	"mesa-ads/internal/core/domain"
 )
 
 // AdUseCase defines the business operations exposed by the ad engine. This
