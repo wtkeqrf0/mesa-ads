@@ -1,0 +1,86 @@
+{
+	"info": {
+		"_postman_id": "af73e08b-df66-41ee-af6d-7dba3d2fbbc0",
+		"name": "New Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40897867"
+	},
+	"item": [
+		{
+			"name": "Запрос на показ",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"userID\": \"123\",\n    \"language\": \"ru\",\n    \"geo\": \"Russia\",\n    \"category\": \"music\",\n    \"interests\": [\n        \"gaming\"\n    ],\n    \"placement\": \"pre-roll\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/ad/request",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"ad",
+						"request"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "клик редирект",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/ad/click/6a604059-6c91-4996-8384-cfd37b44a40a",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"ad",
+						"click",
+						"6a604059-6c91-4996-8384-cfd37b44a40a"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "агрегаты",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/stats/overview?campaign_id=1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"stats",
+						"overview"
+					],
+					"query": [
+						{
+							"key": "campaign_id",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

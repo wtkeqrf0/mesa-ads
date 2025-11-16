@@ -1,0 +1,8 @@
+.DS_Store
+/.idea
+/.vscode
+/coverage.*
+/mesa-ads
+/postgres_data
+/*.env
+/temp
